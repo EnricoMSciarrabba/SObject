@@ -193,10 +193,8 @@ Emit SignalA: 100
 
 Emit SignalB: 100
 Receiver: slotA(100) received!
-Receiver: slotB(100) received!
 
 Emit SignalB: 50
-Receiver: slotA(50) received!
 ```
 
 ## Conclusion
