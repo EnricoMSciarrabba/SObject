@@ -3,144 +3,200 @@
 ## Description
 SObject is a C++ library designed to replicate the Signal and Slot mechanism, similar to the one available in frameworks like Qt. This implementation enables the connection of signals to slots, allowing for asynchronous and reactive communication between objects. By using this library, developers can design modular and flexible systems, ideal for GUI applications, event-driven systems, or any scenario requiring a publisher-subscriber communication paradigm.
 
-The library leverages templates to provide the flexibility typical of C++ and includes automatic connection management to ensure resources are deallocated safely.
+### Main Features
 
-### Funzionalità principali
+1. **Connect**: Allows connecting a signal emitted by one object (`emitter`) to a slot of another object (`receiver`).
+2. **Disconnect**: Allows removing a connection between a signal and a slot.
+3. **Automatic connection management**: When an `SObject` is destroyed, all its connections are automatically removed, preventing memory leaks and keeping the system clean.
 
-1. **Connect**: Permette di connettere un segnale emesso da un oggetto (`emitter`) a una slot di un altro oggetto (`receiver`).
-2. **Disconnect**: Permette di rimuovere una connessione tra un segnale e una slot.
-3. **Gestione automatica delle connessioni**: Quando un `SObject` viene distrutto, tutte le sue connessioni vengono automaticamente rimosse, evitando memory leaks e mantenendo il sistema pulito.
+## How the Connect System Works
 
-## Come funziona il sistema di Connect
+The system is based on a connection between two main components:
 
-Il sistema si basa su una connessione tra due componenti principali:
+- **Signal**: Represents a signal emitted by an object.
+- **Slot**: Represents a function that reacts to the signal, i.e., a callback associated with the signal.
 
-- **Signal**: rappresenta un segnale emesso da un oggetto.
-- **Slot**: rappresenta una funzione che reagisce al segnale, ossia una callback associata al segnale.
+When an object emits a signal, the slots connected to that signal are executed.
 
-Quando un oggetto emette un segnale, le slot connesse a quel segnale vengono eseguite.
+### The `connect` Function
 
-### La funzione `connect`
+The `connect` function establishes a connection between a signal emitted by an object (`emitter`) and a slot of another object (`receiver`). The connection is stable until explicitly disconnected.
 
-La funzione `connect` stabilisce una connessione tra un segnale emesso da un oggetto (`emitter`) e una slot di un altro oggetto (`receiver`). La connessione è stabile finché non viene esplicitamente disconnessa.
-
-#### Sintassi
+#### Syntax
 
 ```cpp
 connect(emitter, &EmitterClass::signalMethod, receiver, &ReceiverClass::slotMethod);
 ```
 
-- `emitter`: Oggetto che emette il segnale.
-- `signalMethod`: Metodo membro di `emitter` che rappresenta il segnale.
-- `receiver`: Oggetto che riceve il segnale e la cui slot deve essere eseguita.
-- `slotMethod`: Metodo membro di `receiver` che rappresenta la slot.
+- `emitter`: Object that emits the signal.
+- `signalMethod`: Member method of `emitter` that represents the signal.
+- `receiver`: Object that receives the signal and whose slot should be executed.
+- `slotMethod`: Member method of `receiver` that represents the slot.
 
-### Come funziona la funzione `connect`:
+### How the `connect` Function Works:
 
-1. Viene creato un oggetto temporaneo per identificare il segnale e la slot.
-2. La connessione viene aggiunta nella mappa dei segnali dell'emettitore.
-3. Se non esiste già una connessione simile, viene creato un nuovo record.
-4. Viene registrato l'emettitore nella lista del ricevitore, garantendo che il ricevitore possa "ascoltare" i segnali dell'emettitore.
+1. A temporary object is created to identify the signal and the slot.
+2. The connection is added to the emitter's signal map.
+3. If no similar connection exists, a new record is created.
+4. The emitter is registered in the receiver's list, ensuring that the receiver can "listen" to the emitter's signals.
 
-### La funzione `disconnect`
+### The `disconnect` Function
 
-La funzione `disconnect` rimuove una connessione tra un segnale e una slot. Ci sono vari metodi per la disconnessione:
+The `disconnect` function removes a connection between a signal and a slot. There are various methods to disconnect:
 
-#### Sintassi per disconnettere una specifica slot
+#### Syntax to disconnect a specific slot
 
 ```cpp
 disconnect(emitter, &EmitterClass::signalMethod, receiver, &ReceiverClass::slotMethod);
 ```
 
-#### Sintassi per disconnettere tutte le slot di un ricevitore per un segnale specifico
+#### Syntax to disconnect all slots of a receiver for a specific signal
 
 ```cpp
 disconnect(emitter, &EmitterClass::signalMethod, receiver);
 ```
 
-#### Sintassi per disconnettere tutte le slot per un segnale
+#### Syntax to disconnect all slots for a signal
 
 ```cpp
 disconnect(emitter, &EmitterClass::signalMethod);
 ```
 
-#### Sintassi per disconnettere tutte le connessioni di un emettitore
+#### Syntax to disconnect all connections of an emitter
 
 ```cpp
 disconnect(emitter);
 ```
 
-### Come funziona la funzione `disconnect`:
+### How the `disconnect` Function Works:
 
-1. **Disconnessione singola**: La funzione rimuove una connessione specifica tra un segnale e una slot. Dopo aver rimosso la connessione, se non ci sono altre slot per quel segnale, il segnale viene eliminato dalla mappa dell'emettitore.
+1. **Single disconnection**: The function removes a specific connection between a signal and a slot. After removing the connection, if there are no other slots for that signal, the signal is deleted from the emitter's map.
    
-2. **Disconnessione per ricevitore**: Disconnette tutte le slot di un ricevitore per un segnale specifico.
+2. **Disconnection by receiver**: Disconnects all slots of a receiver for a specific signal.
 
-3. **Disconnessione per segnale**: Rimuove tutte le connessioni tra un segnale e le relative slot.
+3. **Disconnection by signal**: Removes all connections between a signal and its associated slots.
 
-4. **Disconnessione globale**: Rimuove tutte le connessioni di un emettitore (segnali e slot associati).
+4. **Global disconnection**: Removes all connections of an emitter (signals and associated slots).
 
-### Gestione automatica delle connessioni durante la distruzione di un `SObject`
+### Automatic Connection Management During the Destruction of an `SObject`
 
-Quando un oggetto di tipo `SObject` viene distrutto, il sistema si occupa di rimuovere automaticamente tutte le connessioni a questo oggetto. In pratica, ogni volta che un oggetto viene distrutto:
+When an `SObject` is destroyed, the system automatically removes all connections to this object. In practice, each time an object is destroyed:
 
-1. Vengono rimosse tutte le connessioni da lui emesse.
-2. Vengono rimosse tutte le connessioni a lui ricevute.
-3. Viene effettuata una pulizia della memoria, rimuovendo tutte le slot che non sono più associate a segnali.
+1. All connections emitted by it are removed.
+2. All connections received by it are removed.
+3. Memory is cleaned up by removing any slots no longer associated with signals.
 
-Questo evita possibili memory leaks e mantiene il sistema pulito.
+This prevents potential memory leaks and keeps the system clean.
 
-## Strutture e classi principali
+## Main Structures and Classes
 
 ### `SObject`
 
-La classe base che rappresenta un oggetto che può emettere segnali e ricevere slot. Può essere connesso a un altro oggetto tramite la funzione `connect` e può disconnettersi tramite la funzione `disconnect`.
+The base class that represents an object capable of emitting signals and receiving slots. It can be connected to another object through the `connect` function and can disconnect via the `disconnect` function.
 
-- **Funzioni principali**:
-  - `emitSignal`: Emette un segnale.
-  - `getAllReceivers`: Restituisce tutti i ricevitori associati a un segnale.
-  - `signalIsPresent`: Controlla se un segnale è associato a qualche slot.
-  - `connectedWithObject`: Controlla se l'oggetto è connesso con un altro.
+- **Main functions**:
+  - `emitSignal`: Emits a signal.
+  - `getAllReceivers`: Returns all receivers associated with a signal.
+  - `signalIsPresent`: Checks if a signal is associated with any slots.
+  - `connectedWithObject`: Checks if the object is connected to another.
 
-### `_Signal` e `_Slot`
+### `_Signal` and `_Slot`
 
-Queste sono le classi che gestiscono i segnali e le slot. Un segnale rappresenta una funzione che un oggetto emette, mentre una slot rappresenta una funzione di callback a cui un oggetto si può collegare.
+These are the classes that manage signals and slots. A signal represents a function that an object emits, while a slot represents a callback function to which an object can connect.
 
-### Funzioni di supporto
+### Support Functions
 
-- **`CustomSignalCompare`**: Utilizzata per confrontare segnali durante la ricerca e la disconnessione.
-- **`CustomSlotCompare`**: Utilizzata per confrontare slot e per la disconnessione di slot da segnali o riceventi.
+- **`CustomSignalCompare`**: Used to compare signals during search and disconnection.
+- **`CustomSlotCompare`**: Used to compare slots and disconnect them from signals or receivers.
 
-## Esempio
+## Example
+
+# Code
 
 ```cpp
-class MyObject : public SObject
+class Emitter : public SObject
 {
 public:
-    void signalMethod(int value)
+    S_SIGNAL void signalA(int x){};
+    S_SIGNAL void signalB(int x){};
+    
+    void doSomethingA(int x)
     {
-        emitSignal(&MyObject::signalMethod, value);
+        std::cout << "Emit SignalA: " << x << std::endl;
+        emitSignal(&Emitter::signalA, x);
     }
-
-    void slotMethod(int value)
+    
+    void doSomethingB(int x)
     {
-        std::cout << "Slot received value: " << value << std::endl;
+        std::cout << "Emit SignalB: " << x << std::endl;
+        emitSignal(&Emitter::signalB, x);
+    }
+};
+
+class Receiver : public SObject
+{
+public:
+    S_SLOT void slotA(int x)
+    {
+        std::cout << "Receiver: slotA(" << x << ") received!" << std::endl;
+    }
+    
+    S_SLOT void slotB(int x)
+    {
+        std::cout << "Receiver: slotB(" << x << ") received!" << std::endl;
     }
 };
 
 int main()
 {
-    MyObject emitter;
-    MyObject receiver;
+    Emitter* emitter = new Emitter();
+    Receiver* receiver = new Receiver();
 
-    connect(&emitter, &MyObject::signalMethod, &receiver, &MyObject::slotMethod);
+    connect(emitter, &Emitter::signalA, receiver, &Receiver::slotA);
+    connect(emitter, &Emitter::signalA, receiver, &Receiver::slotB);
+
+    emitter->doSomethingA(42);
+    std::cout << std::endl;
+
+    disconnect(emitter, &Emitter::signalA, receiver);
+
+    emitter->doSomethingA(100);
+    std::cout << std::endl;
     
-    emitter.signalMethod(42); // Il receiver eseguirà slotMethod(42)
+    connect(emitter, &Emitter::signalA, receiver, &Receiver::slotB);
+    connect(emitter, &Emitter::signalB, receiver, &Receiver::slotA);
     
-    disconnect(&emitter, &MyObject::signalMethod, &receiver, &MyObject::slotMethod);
+    emitter->doSomethingB(100);
+    std::cout << std::endl;
+
+    delete receiver;
+
+    emitter->doSomethingB(50);
+    std::cout << std::endl;
+
+    delete emitter;
+
+    return 0;
 }
 ```
 
-## Conclusione
+# Result
 
-Questo sistema di *Signal-Slot* permette di gestire in modo elegante e flessibile la comunicazione tra oggetti in C++. La gestione automatica delle connessioni durante la distruzione degli oggetti evita errori legati alla gestione manuale delle risorse e semplifica la programmazione orientata agli eventi.
+```yaml
+Emit SignalA: 42
+Receiver: slotA(42) received!
+Receiver: slotB(42) received!
+
+Emit SignalA: 100
+
+Emit SignalB: 100
+Receiver: slotA(100) received!
+Receiver: slotB(100) received!
+
+Emit SignalB: 50
+Receiver: slotA(50) received!
+```
+
+## Conclusion
+
+This *Signal-Slot* system allows elegant and flexible communication between objects in C++. The automatic management of connections during object destruction avoids errors related to manual resource management and simplifies event-driven programming.
