@@ -111,9 +111,11 @@ These are the classes that manage signals and slots. A signal represents a funct
 
 ## Example
 
-# Code
+### Code
 
 ```cpp
+#include <sobject.h>
+
 class Emitter : public SObject
 {
 public:
@@ -180,7 +182,7 @@ int main()
 }
 ```
 
-# Result
+### Result
 
 ```yaml
 Emit SignalA: 42
