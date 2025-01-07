@@ -97,7 +97,7 @@ Summary:
 
 ---
 
-### Main Features (Connecte and Disconnect)
+### Main Features (Connect and Disconnect)
 
 1. **Connect**: Allows connecting a signal emitted by one object (`emitter`) to a slot of another object (`receiver`).
 2. **Disconnect**: Allows removing a connection between a signal and a slot.
