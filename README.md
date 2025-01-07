@@ -78,8 +78,15 @@ When an `SObject` is destroyed, the system automatically removes all connections
 This prevents potential memory leaks and keeps the system clean.
 
 
+
+
+
+
+
+
 ## Main Structures and Classes
 
+---
 
 ### SObject
 The SObject class is the basis for implementing the Signal and Slot mechanism. Any object that wants to use this communication system must inherit from SObject. This class manages signals and connections between signals and slots, allowing communication between objects in a decoupled way.
@@ -91,7 +98,6 @@ Public Members:
 - Constructor and Destructor:
   - SObject(): Default constructor. Allows the creation of derived objects.
   - ~SObject(): Destroys the object and releases all connections (associated signals and slots). Removes all associations with signals and slots of other objects.
-- Methods to Verify Connection Status:
 - signalIsPresent:
   - Checks whether a specific signal is present in the signal map (m_signalToSlotMap).
   - Useful for verifying if a signal is connected to any slot.
@@ -122,7 +128,6 @@ Protected Members:
 
 #### Internal Members (Not Usable Directly by the User)
 
-Private Members:
 Data Structures for Managing Connections:
 - m_signalToSlotMap:
   - A map associating signals (_SignalBase) with lists of slots (_SlotBase).
@@ -158,6 +163,8 @@ Private Methods for Managing Connections:
   void removeAllConnection():
   ```
 
+Summary:
+
 | **Category**              | **Members**                                                                                                    | **Description**                                                                                                          | **Access**     |
 |---------------------------|---------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|----------------|
 | **Constructors/Destructors** | `SObject()`, `~SObject()`                                                                                    | Constructs or destroys an `SObject`. Removes all connections when destroyed.                                             | **Public**     |
@@ -166,7 +173,7 @@ Private Methods for Managing Connections:
 | **Internal Structures**   | `m_signalToSlotMap`, `m_slotToSignalObjectList`                                                               | Internal data structures for tracking signals and connections.                                                           | **Private**    |
 | **Internal Management**   | `removeSignalSlotConnection`, `removeSignalReceiverSlotConnection`, `removeAllSignalSlotConnection`, `removeAllConnection` | Private methods for managing the removal of connections (signals and slots). Not intended for direct user interaction. | **Private**    |
 
-
+---
 
 ### The _sobject namespace
 The _sobject namespace defines a system for handling signals and slots, a mechanism commonly used in frameworks like Qt to implement communication between objects. This code is intended to be used by other classes and structures that implement object communication logic, but it should not be used directly by the user. Here’s a simple explanation of its contents and functionality:
@@ -210,7 +217,21 @@ The namespace contains internal implementations, designed to be used by higher-l
 It is not designed for direct use, as it lacks the tools and safeguards needed to prevent errors.
 Direct use requires an in-depth understanding of its components and their functionality.
 
+Summary:
 
+| **Category**             | **Components**                                                                                  | **Description**                                                                                                              | **Access**      |
+|--------------------------|-------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------|-----------------|
+| **Signal System**         | `_SignalBase`, `_Signal`                                                                         | Defines signals and their relationship with methods. A signal represents an event that can trigger a slot on another object.  | **Internal**    |
+| **Signal Base**           | `m_emitter`, `compareByPointer`                                                                  | Provides base functionality for signals, including emitter pointer and comparison of signals.                                 | **Internal**    |
+| **Signal (Template)**     | `m_signal`                                                                                        | A template class for specific signals, associates a signal with an object method.                                             | **Internal**    |
+| **Slot System**           | `_SlotBase`, `_Slot`                                                                              | Defines slots, methods that respond to signals when emitted.                                                                  | **Internal**    |
+| **Slot Base**             | `m_inputParams`, `compareByPointer`, `exec`, `getReceiver`                                       | Base functionality for slots, including input parameters, method execution, and comparison of slots.                         | **Internal**    |
+| **Slot (Template)**       | `m_receiver`, `m_slot`                                                                           | A template class for specific slots, associates a method with a receiver object.                                              | **Internal**    |
+| **Method Invocation**     | `invokeSlot`                                                                                     | Generic function to invoke a method associated with a slot, passing parameters as `std::any`.                                | **Internal**    |
+| **Custom Comparators**    | `CustomSignalCompare`, `CustomSlotCompare`                                                        | Comparators for comparing signals and slots, and managing their deletion.                                                     | **Internal**    |
+| **Why not use directly?** | `Direct use requires in-depth understanding`                                                     | This namespace contains internal implementations for object communication. It’s not intended for direct use by the user.     | **Not for Use** |
+
+---
 
 
 
