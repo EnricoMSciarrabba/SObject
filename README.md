@@ -86,55 +86,85 @@ The SObject class is the basis for implementing the Signal and Slot mechanism. A
 
 
 #### Members Accessible to the User
+
 Public Members:
 - Constructor and Destructor:
   - SObject(): Default constructor. Allows the creation of derived objects.
   - ~SObject(): Destroys the object and releases all connections (associated signals and slots). Removes all associations with signals and slots of other objects.
 - Methods to Verify Connection Status:
-- ```cpp
-  bool signalIsPresent(_sobject::_SignalBase* signal) const:
-  ```
+- signalIsPresent:
   - Checks whether a specific signal is present in the signal map (m_signalToSlotMap).
   - Useful for verifying if a signal is connected to any slot.
-- ```cpp
+  ```cpp
+  bool signalIsPresent(_sobject::_SignalBase* signal) const:
+  ```
+- connectedWithObject:
+  - Verifies if the current object is connected to another object through at least one signal.
+  ```cpp
   bool connectedWithObject(SObject* receiver) const:
   ```
-  - Verifies if the current object is connected to another object through at least one signal.
-- ```cpp
-  std::list<SObject*> getAllReceivers(_sobject::_SignalBase* signal = nullptr) const:
-  ```
+- getAllReceivers:
   - Returns a list of all receivers (other connected objects).
   - If a specific signal is provided as a parameter, it returns only the receivers associated with that signal.
-Protected Members:
-- ```cpp
-  template <typename SM, typename... Args> void emitSignal(SM signalMethod, Args&&... args) const:
+  ```cpp
+  std::list<SObject*> getAllReceivers(_sobject::_SignalBase* signal = nullptr) const:
   ```
+  
+Protected Members:
+- emitSignal:
   - Enables emitting a signal.
   - Invokes all slots associated with the specific signal, passing the provided parameters.
-Note: This method is protected to ensure that only derived classes can emit signals.
+  - This method is protected to ensure that only derived classes can emit signals.
+  ```cpp
+  template <typename SM, typename... Args> void emitSignal(SM signalMethod, Args&&... args) const:
+  ```
 
-Internal Members (Not Usable Directly by the User)
+
+#### Internal Members (Not Usable Directly by the User)
+
 Private Members:
 Data Structures for Managing Connections:
-
-std::map<const _sobject::_SignalBase*, std::list<_sobject::_SlotBase*>> m_signalToSlotMap:
-A map associating signals (_SignalBase) with lists of slots (_SlotBase).
-Manages connections between the signals of the object and the methods (slots) of recipient objects.
-std::list<SObject*> m_slotToSignalObjectList:
-A list that tracks objects connected to the current object through slots.
+- m_signalToSlotMap:
+  - A map associating signals (_SignalBase) with lists of slots (_SlotBase).
+  - Manages connections between the signals of the object and the methods (slots) of recipient objects.
+    ```cpp
+    std::map<const _sobject::_SignalBase*, std::list<_sobject::_SlotBase*>> m_signalToSlotMap:
+    ```
+- m_slotToSignalObjectList:
+  - A list that tracks objects connected to the current object through slots.
+  ```cpp
+  std::list<SObject*> m_slotToSignalObjectList:
+  ```
+ 
 Private Methods for Managing Connections:
+- removeSignalSlotConnection:
+  - Removes a connection between a specific signal and a specific slot.
+  ```cpp
+  void removeSignalSlotConnection(_sobject::_SignalBase* signal, _sobject::_SlotBase* slot):
+  ```
+- removeSignalReceiverSlotConnection:
+  - Removes all connections of a specific signal to a specific receiver object.
+  ```cpp
+  void removeSignalReceiverSlotConnection(_sobject::_SignalBase* signal, SObject* receiver):
+  ```
+- removeAllSignalSlotConnection:
+  - Removes all connections for a specific signal.
+  ```cpp
+  void removeAllSignalSlotConnection(_sobject::_SignalBase* signal):
+  ```
+- removeAllConnection:
+  - Removes all connections of an object (signals and associated slots).
+  ```cpp
+  void removeAllConnection():
+  ```
 
-void removeSignalSlotConnection(_sobject::_SignalBase* signal, _sobject::_SlotBase* slot):
-Removes a connection between a specific signal and a specific slot.
-void removeSignalReceiverSlotConnection(_sobject::_SignalBase* signal, SObject* receiver):
-Removes all connections of a specific signal to a specific receiver object.
-void removeAllSignalSlotConnection(_sobject::_SignalBase* signal):
-Removes all connections for a specific signal.
-void removeAllConnection():
-Removes all connections of an object (signals and associated slots).
-
-
-
+| **Category**              | **Members**                                                                                                    | **Description**                                                                                                          | **Access**     |
+|---------------------------|---------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|----------------|
+| **Constructors/Destructors** | `SObject()`, `~SObject()`                                                                                    | Constructs or destroys an `SObject`. Removes all connections when destroyed.                                             | **Public**     |
+| **Connection Management** | `signalIsPresent`, `connectedWithObject`, `getAllReceivers`                                                   | Methods to verify and retrieve connections between signals and objects.                                                  | **Public**     |
+| **Signal Emission**       | `emitSignal`                                                                                                  | Allows emitting signals to notify events. Usable only by derived classes.                                                | **Protected**  |
+| **Internal Structures**   | `m_signalToSlotMap`, `m_slotToSignalObjectList`                                                               | Internal data structures for tracking signals and connections.                                                           | **Private**    |
+| **Internal Management**   | `removeSignalSlotConnection`, `removeSignalReceiverSlotConnection`, `removeAllSignalSlotConnection`, `removeAllConnection` | Private methods for managing the removal of connections (signals and slots). Not intended for direct user interaction. | **Private**    |
 
 
 
