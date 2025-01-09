@@ -10,7 +10,8 @@ This project provides a simple implementation of Qt's signal-slot mechanism in C
     void emitSignal(void(Emitter::* const signalM)(Args...), Args... args) const
   ```
 
-2: **connect and disconnect methods:** Signals and slots can be connected and disconnected using global methods. Supports connecting methods from any object (receiver) and managing signal handling.
+2: **Connect and Disconnect methods:** Signals and slots can be connected and disconnected using global methods.They allow connecting and disconnecting signals to slots for specific emitter and receiver objects, with overloads for different use cases.
+
   ```cpp
     template<typename Emitter, typename Receiver, typename... Args>
     void connect(SObject* emitter, void(Emitter::*signalM)(Args...), Receiver* receiver, void(Receiver::*slotM)(Args...))
@@ -42,6 +43,7 @@ This project provides a simple implementation of Qt's signal-slot mechanism in C
 ## Example
 
 ### Code
+
 ```cpp
 #include <iostream>
 #include <sobject.h>
@@ -75,8 +77,6 @@ int main()
     {
         B b;
 
-        std::cout << "a: " << &a << " aa: " << aa << " b: " << &b << std::endl;
-
         connect(&a, &A::signal, &b, &B::slot);
         a.send(4);
 
@@ -105,7 +105,21 @@ int main()
     return 0;
 }
 ```
+
 ### Result
+
+```yaml
+B 4
+B 5
+B 5
+B 8
+B 8
+B 9
+B 10
+B 3
+B 4
+C 5
+```
 
 ## Conclusion
 
