@@ -1,12 +1,8 @@
 #ifndef SOBJECT_H
 #define SOBJECT_H
 
-#include <any>
-#include <map>
 #include <list>
-#include <vector>
 #include <algorithm>
-#include <memory>
 #include <cstdint>
 
 #define S_SIGNAL
@@ -28,23 +24,132 @@ namespace _sobject
 
 // =======================================
 //
-//            InvokeSlot
+//              SlotBase
 //
 // =======================================
 
-template <typename T, typename... Args, std::size_t... Is>
-void invokeSlotImpl(T* object, void (T::*method)(Args...), std::vector<std::any>& args, std::index_sequence<Is...>)
+template <typename... Args>
+class _SlotBase
 {
-    // Casto ogni std::any al tipo corretto e invocos il metodo
-    (object->*method)(std::any_cast<Args>(args[Is])...);
-}
+protected:
+    // Costruttori protected in modo che solo Slot possa creare oggetti di questo tipo
+    _SlotBase() = default;
+    _SlotBase(const _SlotBase&) = delete;
 
-template <typename T, typename... Args>
-void invokeSlot(T* object, void (T::*method)(Args...), std::vector<std::any>& args)
+public:
+    virtual ~_SlotBase() {};
+
+
+
+    // ===============================
+    //
+    //  Metodi astratti
+
+public:
+    virtual bool compareByPointer(const _SlotBase* other) const = 0;
+    virtual bool compareByReceiver(const SObject* receiver) const = 0;
+    virtual SObject* getReceiver() const = 0;
+    virtual void exec(Args&&...) = 0;
+
+
+
+    // ===============================
+    //
+    //  CustomSlotCompare
+
+public:
+    struct CustomSlotCompare
+    {
+        CustomSlotCompare() = delete;
+        CustomSlotCompare(const _SlotBase<Args...>* slot, const bool& deleteObject= true) : m_deleteObject(deleteObject), m_slot(slot){};
+        CustomSlotCompare(const SObject* receiver,        const bool& deleteObject= true) : m_deleteObject(deleteObject), m_receiver(receiver){};
+
+        bool operator()(const _SlotBase* slot) const
+        {
+            bool result = false;
+
+            // Controllo se rimuovo per slot o per ricevitore
+            if(m_slot     != nullptr) result = slot->compareByPointer(m_slot);
+            if(m_receiver != nullptr) result = slot->compareByReceiver(m_receiver);
+
+            // Se devo rimuovere la slot dealloco la memoria
+            if(result and m_deleteObject)
+            {
+                delete slot;
+            }
+
+            return result;
+        }
+
+        const bool m_deleteObject        = true;
+        const _SlotBase<Args...>* m_slot = nullptr;
+        const SObject* m_receiver        = nullptr;
+    };
+};
+
+
+
+// =======================================
+//
+//                Slot
+//
+// =======================================
+
+template <typename Receiver, typename... Args>
+class _Slot : public _SlotBase<Args...>
 {
-    // Converto e invoco il metodo
-    invokeSlotImpl(object, method, args, std::index_sequence_for<Args...>{});
-}
+public:
+    // Anche se i costruttori sono pubblici non utilizzare le seguenti classi
+    _Slot() = delete;
+    _Slot(const _Slot&) = delete;
+    _Slot(Receiver* receiver, void(Receiver::*method)(Args...)) : m_receiver(receiver), m_method(method) {};
+    virtual ~_Slot() {};
+
+
+
+    // ===============================
+    //
+    //  Override
+
+    // Confronto di due tramite puntatori (override)
+    virtual bool compareByPointer(const _SlotBase<Args...>* other) const override
+    {
+        // Provo ad effettuare il cast
+        auto slot = dynamic_cast<const _Slot<Receiver, Args...>*>(other);
+        if(slot == nullptr) return false;
+
+        return m_receiver == slot->m_receiver and
+               m_method   == slot->m_method;
+    }
+
+    // Confronto tra ricevitori
+    virtual bool compareByReceiver(const SObject* receiver) const override
+    {
+        return m_receiver == receiver;
+    }
+
+    // Getter receiver
+    virtual SObject* getReceiver() const override
+    {
+        return m_receiver;
+    }
+
+    // Metodo per eseguire la slot
+    virtual void exec(Args&&... args) override
+    {
+        (m_receiver->*m_method)(std::forward<Args...>(args)...);
+    }
+
+
+
+    // ===============================
+    //
+    //  Variabili
+
+private:
+    Receiver* m_receiver;
+    void(Receiver::*m_method)(Args...);
+};
 
 
 
@@ -56,25 +161,56 @@ void invokeSlot(T* object, void (T::*method)(Args...), std::vector<std::any>& ar
 
 class _SignalBase
 {
+protected:
+    // Costruttori protected in modo che solo Signal possa creare oggetti di questo tipo
+    _SignalBase() = default;
+    _SignalBase(const _SignalBase&) = delete;
+
 public:
     virtual ~_SignalBase() {};
 
-    // Confronto di due SignalBase tramite puntatori
+
+
+    // ===============================
+    //
+    //  Metodi astratti
+
+public:
     virtual bool compareByPointer(const _SignalBase* other) const = 0;
+    virtual void removeSlotByReceiver(const SObject* receiver) = 0;
+    virtual bool connectedWithObject(const SObject* receiver) = 0;
+    virtual std::list<SObject*> getAllReceivers() const = 0;
 
-    bool compareByEmitter(const SObject* emitter) const
+
+
+    // ===============================
+    //
+    //  CustomSignalCompare
+
+public:
+    struct CustomSignalCompare
     {
-        return m_emitter == emitter;
-    }
+        CustomSignalCompare() = delete;
+        CustomSignalCompare(const _SignalBase* signal, const bool& deleteObject= false) : m_deleteObject(deleteObject), m_signal(signal){};
 
-protected:
-    // Costruttori protected in modo che solo Signal possa creare oggetti di questo tipo
-    _SignalBase() = delete;
-    _SignalBase(const _SignalBase&) = delete;
-    _SignalBase(const SObject* emitter) : m_emitter(emitter){};
+        bool operator()(const _sobject::_SignalBase* signal) const
+        {
+            // Controllo se il segnale chiave è uguale a quello che si sta cercando
+            bool result = signal->compareByPointer(m_signal);
 
-    // Emettitore del segnale
-    const SObject* m_emitter;
+            // Controllo se eliminare il segnale
+            if(result and m_deleteObject)
+            {
+                delete signal;
+            }
+
+            // Restituisco il risultato
+            return result;
+        }
+
+        const bool m_deleteObject   = false;
+        const _SignalBase* m_signal = nullptr;
+    };
 };
 
 
@@ -85,188 +221,108 @@ protected:
 //
 // =======================================
 
-template <typename S>
+template <typename Emitter, typename... Args>
 class _Signal : public _SignalBase
 {
 public:
     // Anche se i costruttori sono pubblici non utilizzare le seguenti classi
     _Signal() = delete;
     _Signal(const _Signal&) = delete;
-    _Signal(const SObject* objectPtr, const S objectMethod) : _SignalBase(objectPtr), m_signal(objectMethod){};
-    virtual ~_Signal() {};
+    _Signal(void(Emitter::* const signal)(Args...)) : m_signal(signal){};
+    virtual ~_Signal()
+    {
+        // Per ogni slot
+        for(auto slot : m_slots)
+        {
+            // Dealloco oggetto
+            delete slot;
+        }
+    };
 
+
+
+    // ===============================
+    //
+    //  Override
+
+public:
     // Confronto di due SignalBase tramite puntatori (override)
     virtual bool compareByPointer(const _SignalBase* other) const override
     {
-        const _Signal<S>* signal = dynamic_cast<const _Signal<S>*>(other);
+        auto signal = dynamic_cast<const _Signal<Emitter, Args...>*>(other);
         if(signal == nullptr) return false;
 
-        return m_emitter == signal->m_emitter and
-               m_signal  == signal->m_signal;
+        return m_signal  == signal->m_signal;
     }
+
+    // Rimuovo tutte le slot del receiver
+    virtual void removeSlotByReceiver(const SObject* receiver) override
+    {
+        m_slots.remove_if(typename _SlotBase<Args...>::CustomSlotCompare(receiver));
+    }
+
+    virtual bool connectedWithObject(const SObject* receiver) override
+    {
+        // Controllo se ci sono slot del receiver
+        return m_slots.end() !=
+                    std::find_if(m_slots.begin(),
+                    m_slots.end(),
+                    typename _sobject::_SlotBase<Args...>::CustomSlotCompare(receiver, false));
+    }
+
+    virtual std::list<SObject*> getAllReceivers() const override
+    {
+        std::list<SObject*> list_t;
+
+        for(_SlotBase<Args...>* slot : m_slots)
+        {
+            list_t.push_back(slot->getReceiver());
+        }
+
+        return list_t;
+    }
+
+
+
+    // ===============================
+    //
+    //  Interfacce esterne
+
+    template <typename Receiver>
+    void addSlot(_sobject::_Slot<Receiver, Args...>* slot)
+    {
+        m_slots.push_back(slot);
+    }
+
+    void removeSlot(SObject* receiver)
+    {
+        m_slots.remove_if(typename _SlotBase<Args...>::CustomSlotCompare(receiver));
+    }
+
+    template <typename Receiver>
+    void removeSlot(_sobject::_Slot<Receiver, Args...>* slot)
+    {
+        m_slots.remove_if(typename _SlotBase<Args...>::CustomSlotCompare(slot));
+    }
+
+    void execAllSlots(Args&&... args)
+    {
+        for(_SlotBase<Args...>* slot : m_slots)
+        {
+            slot->exec(std::forward<Args...>(args)...);
+        }
+    }
+
+
+
+    // ===============================
+    //
+    //  Variabili
 
 private:
     // Segnale
-    const S m_signal;
-};
-
-
-
-// =======================================
-//
-//              SlotBase
-//
-// =======================================
-
-class _SlotBase
-{
-public:
-    virtual ~_SlotBase() {};
-
-    // Metodi virtuali
-    virtual bool compareByPointer(const _SlotBase* other) const = 0;
-    virtual bool compareByReceiver(const SObject* receiver) const = 0;
-    virtual void exec() = 0;
-    virtual SObject* getReceiver() = 0;
-
-    // Metodo per salvare i parametri in input
-    void setInputParams(const std::vector<std::any>& inputParams)
-    {
-        m_inputParams = inputParams;
-    }
-
-protected:
-    // Costruttori protected in modo che solo Slot possa creare oggetti di questo tipo
-    _SlotBase() = default;
-    _SlotBase(const _SlotBase&) = delete;
-
-    // Lista dei parametri da dare in input alla slot
-    std::vector<std::any> m_inputParams;
-};
-
-
-
-// =======================================
-//
-//                Slot
-//
-// =======================================
-
-template <typename O, typename S>
-class _Slot : public _SlotBase
-{
-public:
-    // Anche se i costruttori sono pubblici non utilizzare le seguenti classi
-    _Slot() = delete;
-    _Slot(const _Slot&) = delete;
-    _Slot(O objectPtr, S objectMethod) : m_receiver(objectPtr), m_slot(objectMethod) {};
-    virtual ~_Slot() {};
-
-    // Confronto di due SlotBase tramite puntatori (override)
-    virtual bool compareByPointer(const _SlotBase* other) const override
-    {
-        // Provo ad effettuare il cast
-        const _Slot<O, S>* slot = dynamic_cast<const _Slot<O, S>*>(other);
-        if(slot == nullptr) return false;
-
-        return m_receiver == slot->m_receiver and
-               m_slot     == slot->m_slot;
-    }
-
-    // Confronto tra ricevitori
-    virtual bool compareByReceiver(const SObject* receiver) const override
-    {
-        return m_receiver == receiver;
-    }
-
-    // Metodo per eseguire la slot
-    virtual void exec() override
-    {
-        invokeSlot(m_receiver, m_slot, m_inputParams);
-    }
-
-    // Getter receiver
-    virtual SObject* getReceiver() override
-    {
-        return m_receiver;
-    }
-
-private:
-    O m_receiver;
-    S m_slot;
-};
-
-
-
-// =======================================
-//
-//          CustomSignalCompare
-//
-// =======================================
-
-struct CustomSignalCompare
-{
-    CustomSignalCompare() = delete;
-    CustomSignalCompare(const _SignalBase* signal, const bool& deleteObject= false) : m_deleteObject(deleteObject), m_signal(signal){};
-
-    bool operator()(const std::pair<const _sobject::_SignalBase*, std::list<_sobject::_SlotBase*>>& element) const
-    {
-        // Controllo se il segnale chiave è uguale a quello che si sta cercando
-        return element.first->compareByPointer(m_signal);
-    }
-
-    bool operator()(const _sobject::_SignalBase* element) const
-    {
-        // Controllo se il segnale chiave è uguale a quello che si sta cercando
-        bool result = element->compareByPointer(m_signal);
-
-        // Controllo se eliminare il segnale
-        if(result and m_deleteObject)
-        {
-            delete element;
-        }
-
-        return true;
-    }
-
-    const bool m_deleteObject   = false;
-    const _SignalBase* m_signal = nullptr;
-};
-
-
-
-// =======================================
-//
-//          CustomSlotCompare
-//
-// =======================================
-
-struct CustomSlotCompare
-{
-    CustomSlotCompare() = delete;
-    CustomSlotCompare(const _SlotBase* slot,   const bool& deleteObject= true) : m_deleteObject(deleteObject), m_slot(slot){};
-    CustomSlotCompare(const SObject* receiver, const bool& deleteObject= true) : m_deleteObject(deleteObject), m_receiver(receiver){};
-
-    bool operator()(const _SlotBase* slot) const
-    {
-        bool result = false;
-
-        // Controllo se rimuovo per slot o per ricevitore
-        if(m_slot     != nullptr) result = slot->compareByPointer(m_slot);
-        if(m_receiver != nullptr) result = slot->compareByReceiver(m_receiver);
-
-        // Se devo rimuovere la slot dealloco la memoria
-        if(result and m_deleteObject)
-        {
-            delete slot;
-        }
-
-        return result;
-    }
-
-    const bool m_deleteObject = true;
-    const _SlotBase* m_slot   = nullptr;
-    const SObject* m_receiver = nullptr;
+    void(Emitter::* const m_signal)(Args...);
+    std::list<_SlotBase<Args...>*> m_slots;
 };
 
 } // namespace _sobject
@@ -302,31 +358,12 @@ public:
         disconnect(this);
 
         // Per ogni SObject che ha una connect con il seguente oggetto
-        std::list<_sobject::_SignalBase const*> listToremove;
         for(SObject* sObject : m_slotToSignalObjectList)
         {
-            // Svuoto la lista di liste da riuovere
-            listToremove.clear();
-
             // Per ogni segnale di tale oggetto
-            for(auto& signal : sObject->m_signalToSlotMap)
+            for(auto signal : sObject->m_signalsList)
             {
-                // Elimino le slot dell'oggetto corrente
-                signal.second.remove_if(_sobject::CustomSlotCompare(this));
-
-                // Se la lista è vuota aggiungo il riferimento per eliminarla successivamente
-                if(signal.second.empty())
-                {
-                    listToremove.push_back(signal.first);
-                }
-            }
-
-            // Una volta finita la rimozione rimuovo le liste vuote
-            for(auto keyToRemove : listToremove)
-            {
-                delete keyToRemove;
-
-                sObject->m_signalToSlotMap.erase(keyToRemove);
+                signal->removeSlotByReceiver(this);
             }
         }
 
@@ -340,31 +377,33 @@ public:
     //  Emit
 
 protected:
-    template <typename SM, typename... Args>
-    void emitSignal(SM signalMethod, Args&&... args) const
+    template <typename Emitter, typename... Args>
+    void emitSignal(void(Emitter::* const signalM)(Args...), Args... args) const
     {
         // Creo un segnale temporaneo per cercarlo
-        const _sobject::_SignalBase* signal = new _sobject::_Signal<SM>(this, signalMethod);
+        auto signal = new _sobject::_Signal<Emitter, Args...>(signalM);
 
         // Cerco il segnale
-        auto it = std::find_if(m_signalToSlotMap.begin(), m_signalToSlotMap.end(), _sobject::CustomSignalCompare(signal));
-        if(it == m_signalToSlotMap.end())
+        auto signalIterator = std::find_if(m_signalsList.begin(), m_signalsList.end(), _sobject::_SignalBase::CustomSignalCompare(signal));
+        if(signalIterator == m_signalsList.end())
         {
             delete signal;
             return;
         }
 
-        // Per ogni slot associata al segnale
-        for(_sobject::_SlotBase* connectedObject : it->second)
+        // Effettuo il cast al tipo di segnale
+        _sobject::_Signal<Emitter, Args...>* slotContainer = dynamic_cast<_sobject::_Signal<Emitter, Args...>*>(*signalIterator);
+        if(slotContainer == nullptr)
         {
-            // Salvo i parametri
-            connectedObject->setInputParams({std::forward<Args>(args)...});
-
-            // Eseguo la slot
-            connectedObject->exec();
+            delete signal;
+            return;
         }
 
+        // Chiamo tutte le slot
+        slotContainer->execAllSlots(std::forward<Args...>(args)...);
+
         delete signal;
+        return;
     }
 
 
@@ -374,24 +413,12 @@ protected:
     //  Metodi esterni
 
 public:
-    bool signalIsPresent(_sobject::_SignalBase* signal) const
-    {
-        return m_signalToSlotMap.end() !=
-               std::find_if(m_signalToSlotMap.begin(),
-                            m_signalToSlotMap.end(),
-                            _sobject::CustomSignalCompare(signal));
-    }
-
     bool connectedWithObject(SObject* receiver) const
     {
         // Per ogni segnale
-        for(auto& pairMap : m_signalToSlotMap)
+        for(auto signal : m_signalsList)
         {
-            // Controllo se ci sono slot del receiver
-            if(pairMap.second.end() !=
-               std::find_if(pairMap.second.begin(),
-                            pairMap.second.end(),
-                            _sobject::CustomSlotCompare(receiver, false)))
+            if(signal->connectedWithObject(receiver))
             {
                 return true;
             }
@@ -400,23 +427,22 @@ public:
         return false;
     }
 
-    std::list<SObject*> getAllReceivers(_sobject::_SignalBase* signal = nullptr) const
+    std::list<SObject*> getAllReceivers(_sobject::_SignalBase* signalIn = nullptr) const
     {
         // Creo la lista dei ricevitori
         std::list<SObject*> allReceiver;
 
         // Per ogni segnale
-        for(auto& pairMap : m_signalToSlotMap)
+        for(const _sobject::_SignalBase* signal : m_signalsList)
         {
-            // Se si vogliono i riceiver di un solo signal controllo se è quello in input
-            if(signal != nullptr and not pairMap.first->compareByPointer(signal)) continue;
+            // Se si vogliono i receiver di un solo signal controllo se è quello in input
+            if(signal == nullptr or not signal->compareByPointer(signalIn)) continue;
 
-            // Per ogni slot associata al segnale
-            for(auto slot : pairMap.second)
-            {
-                // Salvo il receiver
-                allReceiver.push_back(slot->getReceiver());
-            }
+            // Recupero tutti i receiver del segnale
+            std::list<SObject*> signalReceivers = signal->getAllReceivers();
+
+            // Salvo tutti i receiver di questo segnale
+            allReceiver.insert(allReceiver.begin(), signalReceivers.begin(), signalReceivers.end());
         }
 
         // Ordino tutti i receiver (per poi chiamare unique)
@@ -442,85 +468,17 @@ public:
     //  Metodi interni
 
 private:
-    void removeSignalSlotConnection(_sobject::_SignalBase* signal, _sobject::_SlotBase* slot)
-    {
-        // Recupero l'iteratore nella mappa del segnale
-        auto it = std::find_if(m_signalToSlotMap.begin(), m_signalToSlotMap.end(), _sobject::CustomSignalCompare(signal));
-
-        // Controllo se il segnale non è presente
-        if(it == m_signalToSlotMap.end()) return;
-
-        // Rimuovo le slot in input associate al segnale
-        it->second.remove_if(_sobject::CustomSlotCompare(slot));
-
-        // Se al segnale non è associata nessuna slot
-        if(it->second.empty())
-        {
-            // Dealloco la memoria della chiave
-            delete it->first;
-
-            // Elimino il riferimento del segnale nella mappa
-            m_signalToSlotMap.erase(it);
-        }
-    }
-
-    void removeSignalReceiverSlotConnection(_sobject::_SignalBase* signal, SObject* receiver)
-    {
-        // Recupero l'iteratore nella mappa del segnale
-        auto it = std::find_if(m_signalToSlotMap.begin(), m_signalToSlotMap.end(), _sobject::CustomSignalCompare(signal));
-
-        // Controllo se il segnale non è presente
-        if(it == m_signalToSlotMap.end()) return;
-
-        // Rimuovo le slot associate al receiver
-        it->second.remove_if(_sobject::CustomSlotCompare(receiver));
-
-        // Se al segnale non è associata nessuna slot
-        if(it->second.empty())
-        {
-            // Dealloco la memoria della chiave
-            delete it->first;
-
-            // Elimino il riferimento del segnale nella mappa
-            m_signalToSlotMap.erase(it);
-        }
-    }
-
-    void removeAllSignalSlotConnection(_sobject::_SignalBase* signal)
-    {
-        // Recupero l'iteratore nella mappa del segnale
-        auto it = std::find_if(m_signalToSlotMap.begin(), m_signalToSlotMap.end(), _sobject::CustomSignalCompare(signal));
-
-        // Controllo se il segnale non è presente
-        if(it == m_signalToSlotMap.end()) return;
-
-        // Rimuovo tutte le slot
-        for(auto slot : it->second) delete slot;
-        it->second.clear();
-
-        // Poichè al segnale non è associata nessuna slot
-        // Dealloco la memoria della chiave ed elimino il riferimento del segnale nella mappa
-        delete it->first;
-        m_signalToSlotMap.erase(it);
-    }
-
     void removeAllConnection()
     {
         // Per ogni segnale
-        for(auto& pair : m_signalToSlotMap)
+        for(auto signal : m_signalsList)
         {
-            // Dealloco tutti i valori delle slot
-            for(auto& slot : pair.second) delete slot;
-
-            // Clear della lista
-            pair.second.clear();
-
-            // Dealloco chiave
-            delete pair.first;
+            // Elimino segnale
+            delete signal;
         }
 
         // Clear della mappa
-        m_signalToSlotMap.clear();
+        m_signalsList.clear();
     }
 
 
@@ -530,7 +488,7 @@ private:
     //  Strutture interne
 
 private:
-    std::map<const _sobject::_SignalBase*, std::list<_sobject::_SlotBase*>> m_signalToSlotMap;
+    std::list<_sobject::_SignalBase*> m_signalsList;
     std::list<SObject*> m_slotToSignalObjectList;
 
 
@@ -542,14 +500,14 @@ private:
     template<typename E, typename R, typename... Args>
     friend void connect(SObject* emitter, void(E::*signalM)(Args...), R* receiver, void(R::*slotM)(Args...));
 
-    template<typename E, typename R, typename... Args>
-    friend void disconnect(SObject* emitter, void(E::*signalM)(Args...), R* receiver, void(R::*slotM)(Args...));
+    template<typename Emitter, typename Receiver, typename... Args>
+    friend void disconnect(SObject* emitter, void(Emitter::*signalM)(Args...), Receiver* receiver, void(Receiver::*slotM)(Args...));
 
-    template<typename E, typename R, typename... Args>
-    friend void disconnect(SObject* emitter, void(E::*signalM)(Args...), R* receiver);
+    template<typename Emitter, typename Receiver, typename... Args>
+    friend void disconnect(SObject* emitter, void(Emitter::*signalM)(Args...), Receiver* receiver);
 
-    template<typename E, typename... Args>
-    friend void disconnect(SObject* emitter, void(E::*signalM)(Args...));
+    template<typename Emitter, typename... Args>
+    friend void disconnect(SObject* emitter, void(Emitter::*signalM)(Args...));
 
     friend void disconnect(SObject* emitter);
 };
@@ -568,30 +526,38 @@ private:
 //
 // =======================================
 
-template<typename E, typename R, typename... Args>
-void connect(SObject* emitter, void(E::*signalM)(Args...), R* receiver, void(R::*slotM)(Args...))
+template<typename Emitter, typename Receiver, typename... Args>
+void connect(SObject* emitter, void(Emitter::*signalM)(Args...), Receiver* receiver, void(Receiver::*slotM)(Args...))
 {
     // Creo l'oggetto per identificare il segnale
-    const _sobject::_SignalBase* signal = new _sobject::_Signal<void(E::*)(Args...)>(emitter, signalM);
-    bool deleteSignal = false;
+    _sobject::_Signal<Emitter, Args...>* signal = new _sobject::_Signal<Emitter, Args...>(signalM);
 
     // Creo l'oggetto per identificare la slot
-    _sobject::_SlotBase* slot = new _sobject::_Slot<R*, void(R::*)(Args...)>(receiver, slotM);
+    _sobject::_Slot<Receiver, Args...>* slot = new _sobject::_Slot<Receiver, Args...>(receiver, slotM);
 
-    // Controllo se l'emettitore ha già una lista associata al segnale
-    auto mapIt = std::find_if(emitter->m_signalToSlotMap.begin(), emitter->m_signalToSlotMap.end(), _sobject::CustomSignalCompare(signal));
-    if(mapIt != emitter->m_signalToSlotMap.end())
+    // Controllo se il segnale ha delle slot registrate
+    auto signalFound = std::find_if(emitter->m_signalsList.begin(), emitter->m_signalsList.end(), _sobject::_SignalBase::CustomSignalCompare(signal));
+    if(signalFound != emitter->m_signalsList.end())
     {
-        // Inserisco il segnale nella lista
-        mapIt->second.push_back(slot);
+        // Effettuo il cast al tipo di segnale
+        _sobject::_Signal<Emitter, Args...>* slotContainer = dynamic_cast<_sobject::_Signal<Emitter, Args...>*>(*signalFound);
+        if(slotContainer == nullptr)
+        {
+            delete signal;
+            delete slot;
+            return;
+        }
 
-        // Il nuovo oggetto che identifica il segnale deve essere eliminato
-        deleteSignal = true;
+        // Salvo la nuova slot
+        slotContainer->addSlot(slot);
+
+        delete signal;
     }
     else
     {
-        // Se è la prima connect creo la lista
-        emitter->m_signalToSlotMap[signal] = std::list<_sobject::_SlotBase*>{slot};
+        // Se è la prima connect aggiungo la slot alla connect e la signal all'emitter
+        signal->addSlot(slot);
+        emitter->m_signalsList.push_back(signal);
     }
 
     // Controllo se il ricevitore non ha il segnale registrato
@@ -600,13 +566,6 @@ void connect(SObject* emitter, void(E::*signalM)(Args...), R* receiver, void(R::
     {
         // Registro il segnale
         receiver->m_slotToSignalObjectList.push_back(emitter);
-        deleteSignal = false;
-    }
-
-    // Controllo se eliminare signal e slot temporanei
-    if(deleteSignal)
-    {
-        delete signal;
     }
 }
 
@@ -618,19 +577,34 @@ void connect(SObject* emitter, void(E::*signalM)(Args...), R* receiver, void(R::
 //
 // =======================================
 
-template<typename E, typename R, typename... Args>
-void disconnect(SObject* emitter, void(E::*signalM)(Args...), R* receiver, void(R::*slotM)(Args...))
+template<typename Emitter, typename Receiver, typename... Args>
+void disconnect(SObject* emitter, void(Emitter::*signalM)(Args...), Receiver* receiver, void(Receiver::*slotM)(Args...))
 {
     // Creo l'oggetto per identificare il segnale e la slot
-    std::unique_ptr<_sobject::_SignalBase> signal = std::make_unique<_sobject::_Signal<void(E::*)(Args...)>>(emitter, signalM);
-    std::unique_ptr<_sobject::_SlotBase>   slot   = std::make_unique<_sobject::_Slot<R*, void(R::*)(Args...)>>(receiver, slotM);
-
-    // Controllo se esistono connect con il seguente segnale
-    if(not emitter->signalIsPresent(signal.get())) return;
+    _sobject::_Signal<Emitter, Args...> *signal = new _sobject::_Signal<Emitter, Args...>(signalM);
+    _sobject::_Slot<Receiver, Args...>  *slot   = new _sobject::_Slot<Receiver, Args...>(receiver, slotM);
 
     // Prima lavoro sull'emitter
-    // Rimuovo i collegamenti nell'emitter tra signal e slot
-    emitter->removeSignalSlotConnection(signal.get(), slot.get());
+    // Trovo il segnale nell'emitter
+    auto emitterSignal = std::find_if(emitter->m_signalsList.begin(), emitter->m_signalsList.end(), _sobject::_SignalBase::CustomSignalCompare(signal));
+    if(emitterSignal == emitter->m_signalsList.end())
+    {
+        delete signal;
+        delete slot;
+        return;
+    }
+
+    // Effettuo il cast
+    _sobject::_Signal<Emitter, Args...>* signalT = dynamic_cast<_sobject::_Signal<Emitter, Args...>*>(*emitterSignal);
+    if(signalT == nullptr)
+    {
+        delete signal;
+        delete slot;
+        return;
+    }
+
+    // Rimuovo slot
+    signalT->removeSlot(slot);
 
     // Dopo lavoro sul receiver
     // Controllo che tra tutti i signal dell'emitter non ci siano connect con slot del receiver
@@ -639,20 +613,37 @@ void disconnect(SObject* emitter, void(E::*signalM)(Args...), R* receiver, void(
         // Rimuovo l'emitter dal receiver
         dynamic_cast<SObject*>(receiver)->m_slotToSignalObjectList.remove(emitter);
     }
+
+    delete signal;
+    delete slot;
+    return;
 }
 
-template<typename E, typename R, typename... Args>
-void disconnect(SObject* emitter, void(E::*signalM)(Args...), R* receiver)
+template<typename Emitter, typename Receiver, typename... Args>
+void disconnect(SObject* emitter, void(Emitter::*signalM)(Args...), Receiver* receiver)
 {
     // Creo l'oggetto per identificare il segnale
-    std::unique_ptr<_sobject::_SignalBase> signal = std::make_unique<_sobject::_Signal<void(E::*)(Args...)>>(emitter, signalM);
-
-    // Controllo se esistono connect con il seguente segnale
-    if(not emitter->signalIsPresent(signal.get())) return;
+    _sobject::_SignalBase* signal = new _sobject::_Signal<Emitter, Args...>(signalM);
 
     // Prima lavoro sull'emitter
-    // Rimuovo i collegamenti nell'emitter tra signal e tutte le slot del receiver
-    emitter->removeSignalReceiverSlotConnection(signal.get(), receiver);
+    // Cerco il segnale
+    auto emitterSignal = std::find_if(emitter->m_signalsList.begin(), emitter->m_signalsList.end(), _sobject::_SignalBase::CustomSignalCompare(signal));
+    if(emitterSignal == emitter->m_signalsList.end())
+    {
+        delete signal;
+        return;
+    }
+
+    // Effettuo il cast
+    _sobject::_Signal<Emitter, Args...>* signalT = dynamic_cast<_sobject::_Signal<Emitter, Args...>*>(*emitterSignal);
+    if(signalT == nullptr)
+    {
+        delete signal;
+        return;
+    }
+
+    // Rimuovo slot
+    signalT->removeSlot(receiver);
 
     // Dopo lavoro sul receiver
     // Controllo che tra tutti i signal dell'emitter non ci siano connect con slot del receiver
@@ -661,22 +652,21 @@ void disconnect(SObject* emitter, void(E::*signalM)(Args...), R* receiver)
         // Rimuovo l'emitter dal receiver
         dynamic_cast<SObject*>(receiver)->m_slotToSignalObjectList.remove(emitter);
     }
+
+    delete signal;
 }
 
-template<typename E, typename... Args>
-void disconnect(SObject* emitter, void(E::*signalM)(Args...))
+template<typename Emitter, typename... Args>
+void disconnect(SObject* emitter, void(Emitter::*signalM)(Args...))
 {
     // Creo l'oggetto per identificare il segnale
-    std::unique_ptr<_sobject::_SignalBase> signal = std::make_unique<_sobject::_Signal<void(E::*)(Args...)>>(emitter, signalM);
-
-    // Controllo se esistono connect con il seguente segnale
-    if(not emitter->signalIsPresent(signal.get())) return;
+    _sobject::_SignalBase* signal = new _sobject::_Signal<Emitter, Args...>(signalM);
 
     // Recupero tutti i receiver associati al segnale
-    std::list<SObject*> receiverList = emitter->getAllReceivers(signal.get());
+    std::list<SObject*> receiverList = emitter->getAllReceivers(signal);
 
-    // Rimuovo tutti i collegamenti nell'emitter tra signal e tutte le slot
-    emitter->removeAllSignalSlotConnection(signal.get());
+    // Rimuovo il segnale
+    emitter->m_signalsList.remove_if(_sobject::_SignalBase::CustomSignalCompare(signal, true));
 
     // Controllo per tutti i receiver trovati prima se questi hanno altre connect con l'emitter
     for(SObject* receiver : receiverList)
@@ -688,6 +678,8 @@ void disconnect(SObject* emitter, void(E::*signalM)(Args...))
             receiver->m_slotToSignalObjectList.remove(emitter);
         }
     }
+
+    delete signal;
 }
 
 void disconnect(SObject* emitter)
