@@ -51,7 +51,7 @@ This project provides a simple implementation of Qt's signal-slot mechanism in C
 class A : public SObject
 {
 public:
-    void signal(int){};
+    S_SIGNAL void signal(int){};
     void send(int num)
     {
         emitSignal(&A::signal, num);
