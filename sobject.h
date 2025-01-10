@@ -3,7 +3,6 @@
 
 #include <list>
 #include <algorithm>
-#include <cstdint>
 
 #define S_SIGNAL
 #define S_SLOT
@@ -436,7 +435,7 @@ public:
         for(const _sobject::_SignalBase* signal : m_signalsList)
         {
             // Se si vogliono i receiver di un solo signal controllo se è quello in input
-            if(signal == nullptr or not signal->compareByPointer(signalIn)) continue;
+            if(signal == nullptr or (signalIn != nullptr and not signal->compareByPointer(signalIn))) continue;
 
             // Recupero tutti i receiver del segnale
             std::list<SObject*> signalReceivers = signal->getAllReceivers();
@@ -446,16 +445,10 @@ public:
         }
 
         // Ordino tutti i receiver (per poi chiamare unique)
-        allReceiver.sort([](SObject* obj1, SObject* obj2)
-        {
-            return reinterpret_cast<uintptr_t>(obj1) < reinterpret_cast<uintptr_t>(obj2);
-        });
+        allReceiver.sort();
 
         // Chiamo unique ed elimino le ripetizioni
-        auto _allReceiver = std::unique(allReceiver.begin(), allReceiver.end(), [](SObject* obj1, SObject* obj2)
-        {
-            return reinterpret_cast<uintptr_t>(obj1) == reinterpret_cast<uintptr_t>(obj2);
-        });
+        auto _allReceiver = std::unique(allReceiver.begin(), allReceiver.end());
         allReceiver.erase(_allReceiver, allReceiver.end());
 
         return allReceiver;
@@ -468,7 +461,7 @@ public:
     //  Metodi interni
 
 private:
-    void removeAllConnection()
+    void removeAllSignal()
     {
         // Per ogni segnale
         for(auto signal : m_signalsList)
@@ -688,7 +681,7 @@ void disconnect(SObject* emitter)
     std::list<SObject*> receiverList = emitter->getAllReceivers();
 
     // Rimuovo tutte le connect dall'emitter
-    emitter->removeAllConnection();
+    emitter->removeAllSignal();
 
     // Per tutti i receiver trovati prima
     for(SObject* receiver : receiverList)
